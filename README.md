@@ -1,6 +1,8 @@
 # long-shot-ddns-aws
 
-AWS-side of the **long-shot-ddns** project: a Lambda + API Gateway that receives `{hostname, ip, pi_id}` from a Raspberry Pi and upserts a Route 53 A record, with DynamoDB-backed hostname ownership and idempotent writes. The matching Pi-side client lives in a separate repo (link in your fork's description or notes).
+AWS-side of the **long-shot-ddns** project: a Lambda + API Gateway that receives `{hostname, ip, pi_id}` from a Raspberry Pi and upserts a Route 53 A record, with DynamoDB-backed hostname ownership and idempotent writes.
+
+The matching Pi-side client: [francman/long-shot-ddns](https://github.com/francman/long-shot-ddns).
 
 See [`PROTOCOL.md`](PROTOCOL.md) for the wire contract shared with the client and [`SECURITY.md`](SECURITY.md) for the threat model.
 

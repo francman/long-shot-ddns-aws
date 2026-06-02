@@ -1,8 +1,8 @@
 # long-shot-ddns wire protocol
 
 Single source of truth for the contract between the Pi client
-([long-shot-ddns](../) — the Raspberry Pi side) and this AWS Lambda
-backend.
+([francman/long-shot-ddns](https://github.com/francman/long-shot-ddns) —
+the Raspberry Pi side) and this AWS Lambda backend.
 
 When this file changes, both repos need a matching update.
 
