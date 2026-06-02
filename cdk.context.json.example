@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy to cdk.context.json and fill in your own values. cdk.context.json is gitignored.",
+
+  "hosted_zone_id":   "Z123ABC456DEFGHIJKLMN",
+  "hosted_zone_name": "example.com",
+  "custom_domain":    "ddns.example.com",
+
+  "record_ttl": 300,
+
+  "_optional_repo_url": "Set `repo_url` to a URL string to tag every resource with the IaC location. Omit if you don't want it.",
+  "repo_url": "github.com/your-username/long-shot-ddns-aws"
+}

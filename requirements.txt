@@ -1,0 +1,6 @@
+aws-cdk-lib>=2.140.0
+constructs>=10.0.0,<11.0.0
+# boto3 is already provided by the Lambda runtime — we list it here so the
+# handler can be imported / tested locally. It is NOT bundled into the Lambda
+# zip (CDK only packages src/, not requirements.txt).
+boto3>=1.34.0
