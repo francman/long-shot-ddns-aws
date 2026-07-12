@@ -4,3 +4,5 @@ constructs>=10.0.0,<11.0.0
 # handler can be imported / tested locally. It is NOT bundled into the Lambda
 # zip (CDK only packages src/, not requirements.txt).
 boto3>=1.34.0
+# Dev/test only — never deployed.
+pytest>=7
