@@ -59,6 +59,13 @@ record_ttl = int(app.node.try_get_context("record_ttl") or 300)
 # Optional: email for the dead-Pi heartbeat alarm. Omit to skip the alarm.
 alert_email = app.node.try_get_context("alert_email")
 
+# Optional: pin the target account/region in cdk.context.json. When pinned,
+# the CDK CLI refuses to deploy if the active credentials belong to a
+# different account — a guard against deploying to the wrong AWS account.
+# Unpinned, it follows whatever credentials are active (CDK_DEFAULT_*).
+account = app.node.try_get_context("account") or os.environ.get("CDK_DEFAULT_ACCOUNT")
+region = app.node.try_get_context("region") or os.environ.get("CDK_DEFAULT_REGION", "us-east-1")
+
 DdnsStack(
     app,
     "LongShotDdnsStack",
@@ -67,10 +74,7 @@ DdnsStack(
     custom_domain=custom_domain,
     record_ttl=record_ttl,
     alert_email=alert_email,
-    env=cdk.Environment(
-        account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
-        region=os.environ.get("CDK_DEFAULT_REGION", "us-east-1"),
-    ),
+    env=cdk.Environment(account=account, region=region),
     description="long-shot-ddns: Lambda + API Gateway + DynamoDB + custom domain that updates a Route 53 A record from a Raspberry Pi.",
 )
 

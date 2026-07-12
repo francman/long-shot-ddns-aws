@@ -1,6 +1,10 @@
 {
   "_comment": "Copy to cdk.context.json and fill in your own values. cdk.context.json is gitignored.",
 
+  "_optional_account": "Pin `account` (and optionally `region`) to make the CDK CLI refuse to deploy when the active AWS credentials belong to a different account — protects against deploying to the wrong account. Omit to follow whatever credentials are active.",
+  "account": "123456789012",
+  "region": "us-east-1",
+
   "hosted_zone_id":   "Z123ABC456DEFGHIJKLMN",
   "hosted_zone_name": "example.com",
   "custom_domain":    "ddns.example.com",
