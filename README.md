@@ -49,7 +49,6 @@ Pi hasn't reported for 30h (the client heartbeats at least daily). After the
 first deploy with it set, confirm the subscription email AWS sends you.
 
 ```sh
-
 cdk bootstrap        # one-time per account/region
 cdk deploy
 ```

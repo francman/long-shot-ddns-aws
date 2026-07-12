@@ -40,14 +40,20 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
+def _canon_hostname(name: str) -> str:
+    """Canonical hostname form used for every comparison in this module."""
+    return name.strip().lower().rstrip(".")
+
+
 HOSTED_ZONE_ID = os.environ["HOSTED_ZONE_ID"]
-HOSTED_ZONE_NAME = os.environ["HOSTED_ZONE_NAME"].strip().lower().rstrip(".")
+HOSTED_ZONE_NAME = _canon_hostname(os.environ["HOSTED_ZONE_NAME"])
 RECORD_TTL = int(os.environ.get("RECORD_TTL", "300"))
 OWNERSHIP_TABLE = os.environ["OWNERSHIP_TABLE"]
-# The zone apex is always reserved (its records belong to the zone itself,
-# not to any Pi); the custom domain arrives via RESERVED_HOSTNAMES.
+# Infrastructure records a client may never update: the zone apex plus
+# whatever the stack passes in (the API's own custom domain).
 RESERVED_HOSTNAMES = {HOSTED_ZONE_NAME} | {
-    h.strip().lower().rstrip(".")
+    _canon_hostname(h)
     for h in os.environ.get("RESERVED_HOSTNAMES", "").split(",")
     if h.strip()
 }
@@ -156,7 +162,7 @@ def handler(event: dict, _context: Any) -> dict:
         logger.warning("invalid JSON body: %s", exc)
         return _response(400, {"error": "request body must be valid JSON"})
 
-    hostname = (payload.get("hostname") or "").strip().lower().rstrip(".")
+    hostname = _canon_hostname(payload.get("hostname") or "")
     ip = (payload.get("ip") or "").strip()
     pi_id = (payload.get("pi_id") or "").strip().lower()
 
@@ -172,20 +178,20 @@ def handler(event: dict, _context: Any) -> dict:
             {"error": "missing or invalid 'pi_id' (expected 32 hex chars, /etc/machine-id format)"},
         )
 
-    # Zone gate — must run BEFORE the ownership claim so out-of-zone requests
-    # never leave a row in DynamoDB. Requiring a strict subdomain also keeps
-    # the zone apex out of reach.
-    if not hostname.endswith("." + HOSTED_ZONE_NAME):
-        logger.warning("rejected out-of-zone hostname: %s (zone %s)", hostname, HOSTED_ZONE_NAME)
-        return _response(
-            403,
-            {"error": f"'{hostname}' is not a subdomain of the configured zone '{HOSTED_ZONE_NAME}'"},
-        )
+    # Reserved gate first (owns the apex + API domain), then the zone gate.
+    # Both run BEFORE the ownership claim so rejected requests never leave a
+    # row in DynamoDB.
     if hostname in RESERVED_HOSTNAMES:
         logger.warning("rejected reserved hostname: %s", hostname)
         return _response(
             403,
             {"error": f"'{hostname}' is reserved (infrastructure record) and cannot be updated"},
+        )
+    if not hostname.endswith("." + HOSTED_ZONE_NAME):
+        logger.warning("rejected out-of-zone hostname: %s (zone %s)", hostname, HOSTED_ZONE_NAME)
+        return _response(
+            403,
+            {"error": f"'{hostname}' is not a subdomain of the configured zone '{HOSTED_ZONE_NAME}'"},
         )
 
     # Ownership gate.
