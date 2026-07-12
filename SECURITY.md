@@ -28,7 +28,10 @@ What protects the deployed system:
 | DDoS / cost-runaway | API Gateway hard-throttles at 10 rps + 20 burst. Worst case ~26K requests/month → ~$0.10 cost. |
 | Another Pi (with same API key, by accident) claiming a hostname owned by yours | DynamoDB `ConditionExpression` rejects with `409 Conflict`. Ownership is write-once per hostname. |
 | Lambda compromise → arbitrary DNS writes | Lambda's IAM role is scoped to one hosted zone (least privilege). Even with full Lambda control, an attacker can only modify records inside that zone. |
-| API key leak (most realistic) | Blast radius is "attacker can claim unowned hostnames in your zone and update their IPs." Rotate the key (delete + recreate via CDK) to invalidate. |
+| Key-holder clobbers the API's own DNS record (`hostname` = custom domain) or the zone apex | Lambda rejects reserved hostnames with `403` before any DynamoDB/Route 53 access. The endpoint's A-alias and apex records are unreachable through the API. |
+| Key-holder targets a hostname outside the zone | Lambda enforces strict-subdomain-of-zone with `403` before the ownership claim — no DynamoDB row, no Route 53 call. |
+| API key leak (most realistic) | Blast radius is "attacker can claim unowned **strict subdomains** of your zone and update their IPs." Infrastructure records (apex, API domain) stay untouchable. Rotate the key (delete + recreate via CDK) to invalidate. |
+| Pi silently dies → record goes stale unnoticed | Optional CloudWatch heartbeat alarm (`alert_email` in `cdk.context.json`): no Lambda invocations for 30h → SNS email. |
 
 ## What's intentionally public
 

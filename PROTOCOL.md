@@ -25,7 +25,7 @@ When this file changes, both repos need a matching update.
 }
 ```
 
-- `hostname`: fully-qualified DNS name to update. Must live inside the hosted zone the Lambda is configured for; the Lambda rejects mismatches with `403`.
+- `hostname`: fully-qualified DNS name to update. Must be a **strict subdomain** of the hosted zone the Lambda is configured for; the Lambda rejects anything else with `403`. The zone apex and the API's own custom domain (e.g. `ddns.example.com`) are reserved infrastructure records and are also rejected with `403`.
 - `ip`: IPv4 address the Pi observed for itself. Required. IPv6 / AAAA records are not supported in v1.
 - `pi_id`: stable per-device identifier. The Pi reads `/etc/machine-id` (32 hex chars, set at first boot on every modern Linux distribution). Required.
 
@@ -64,7 +64,8 @@ Steady-state heartbeats (Pi POSTs same IP every 24h) cost **zero** Route 53 writ
 |---|---|---|
 | `200 OK` | `{"status": "created" \| "updated" \| "unchanged", "hostname", "ip", "ttl"}` | Request accepted (with or without an actual Route 53 write) |
 | `400 Bad Request` | `{"error": "..."}` | Malformed JSON, missing/invalid `hostname`, `ip`, or `pi_id` |
-| `403 Forbidden` | `{"error": "..."}` | (from API Gateway) missing or invalid API key |
+| `403 Forbidden` | (from API Gateway) default error JSON | Missing or invalid API key |
+| `403 Forbidden` | `{"error": "..."}` | (from Lambda) `hostname` outside the configured zone, or a reserved hostname (zone apex / the API's own domain) |
 | `409 Conflict` | `{"error": "..."}` | `hostname` already claimed by a different `pi_id` |
 | `5xx` | Lambda/API Gateway default error JSON | Route 53 / DynamoDB / Lambda failure |
 

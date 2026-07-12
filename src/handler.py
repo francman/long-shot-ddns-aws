@@ -3,17 +3,23 @@
 Receives {hostname, ip, pi_id} from the Pi client (authenticated upstream by
 API Gateway via an API key) and:
 
-  1. Verifies ownership of the hostname in DynamoDB:
+  1. Rejects hostnames outside the configured hosted zone (403) and reserved
+     hostnames — the DDNS endpoint's own custom domain and the zone apex —
+     so a client can never clobber the infrastructure's own records.
+  2. Verifies ownership of the hostname in DynamoDB:
        - first POST for hostname  -> claim it (conditional PutItem)
        - subsequent POSTs from the same pi_id -> read-only verify
        - POST from a different pi_id -> 409 Conflict
-  2. Reads the current Route 53 A record (if any).
-  3. UPSERTs only when the IP actually differs.
+  3. Reads the current Route 53 A record (if any).
+  4. UPSERTs only when the IP actually differs.
 
 Environment:
-  HOSTED_ZONE_ID  — Route 53 hosted zone ID (required, set by CDK)
-  RECORD_TTL      — A-record TTL in seconds (default 300, set by CDK)
-  OWNERSHIP_TABLE — DynamoDB table name (required, set by CDK)
+  HOSTED_ZONE_ID     — Route 53 hosted zone ID (required, set by CDK)
+  HOSTED_ZONE_NAME   — zone name, e.g. example.com (required, set by CDK)
+  RECORD_TTL         — A-record TTL in seconds (default 300, set by CDK)
+  OWNERSHIP_TABLE    — DynamoDB table name (required, set by CDK)
+  RESERVED_HOSTNAMES — comma-separated hostnames that must never be updated
+                       (the API's custom domain; set by CDK)
 
 Wire contract: see PROTOCOL.md.
 """
@@ -25,6 +31,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any, Optional
 
 import boto3
@@ -34,8 +41,16 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 HOSTED_ZONE_ID = os.environ["HOSTED_ZONE_ID"]
+HOSTED_ZONE_NAME = os.environ["HOSTED_ZONE_NAME"].strip().lower().rstrip(".")
 RECORD_TTL = int(os.environ.get("RECORD_TTL", "300"))
 OWNERSHIP_TABLE = os.environ["OWNERSHIP_TABLE"]
+# The zone apex is always reserved (its records belong to the zone itself,
+# not to any Pi); the custom domain arrives via RESERVED_HOSTNAMES.
+RESERVED_HOSTNAMES = {HOSTED_ZONE_NAME} | {
+    h.strip().lower().rstrip(".")
+    for h in os.environ.get("RESERVED_HOSTNAMES", "").split(",")
+    if h.strip()
+}
 
 route53 = boto3.client("route53")
 ownership = boto3.resource("dynamodb").Table(OWNERSHIP_TABLE)
@@ -72,8 +87,6 @@ def _claim_or_verify(hostname: str, pi_id: str) -> tuple[bool, Optional[str]]:
     If the row already exists, fall back to a GetItem to check whether the
     existing owner matches. Never overwrites an existing claim.
     """
-    import time
-
     try:
         ownership.put_item(
             Item={"hostname": hostname, "pi_id": pi_id, "claimed_at": int(time.time())},
@@ -157,6 +170,22 @@ def handler(event: dict, _context: Any) -> dict:
         return _response(
             400,
             {"error": "missing or invalid 'pi_id' (expected 32 hex chars, /etc/machine-id format)"},
+        )
+
+    # Zone gate — must run BEFORE the ownership claim so out-of-zone requests
+    # never leave a row in DynamoDB. Requiring a strict subdomain also keeps
+    # the zone apex out of reach.
+    if not hostname.endswith("." + HOSTED_ZONE_NAME):
+        logger.warning("rejected out-of-zone hostname: %s (zone %s)", hostname, HOSTED_ZONE_NAME)
+        return _response(
+            403,
+            {"error": f"'{hostname}' is not a subdomain of the configured zone '{HOSTED_ZONE_NAME}'"},
+        )
+    if hostname in RESERVED_HOSTNAMES:
+        logger.warning("rejected reserved hostname: %s", hostname)
+        return _response(
+            403,
+            {"error": f"'{hostname}' is reserved (infrastructure record) and cannot be updated"},
         )
 
     # Ownership gate.
