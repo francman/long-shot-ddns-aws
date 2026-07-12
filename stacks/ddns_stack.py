@@ -60,11 +60,22 @@ class DdnsStack(Stack):
                 name="hostname", type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            point_in_time_recovery=True,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True,
+            ),
             removal_policy=RemovalPolicy.RETAIN,
         )
 
         # --- Lambda function ------------------------------------------------
+        # Explicit log group instead of the deprecated log_retention= (which
+        # provisions a hidden custom-resource Lambda just to set retention).
+        handler_logs = logs.LogGroup(
+            self,
+            "DdnsHandlerLogs",
+            retention=logs.RetentionDays.ONE_MONTH,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
         handler_fn = _lambda.Function(
             self,
             "DdnsHandler",
@@ -73,7 +84,7 @@ class DdnsStack(Stack):
             code=_lambda.Code.from_asset("src"),
             timeout=Duration.seconds(15),
             memory_size=128,
-            log_retention=logs.RetentionDays.ONE_MONTH,
+            log_group=handler_logs,
             environment={
                 "HOSTED_ZONE_ID": hosted_zone_id,
                 "HOSTED_ZONE_NAME": hosted_zone_name,
