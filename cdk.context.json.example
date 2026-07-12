@@ -8,5 +8,8 @@
   "record_ttl": 300,
 
   "_optional_repo_url": "Set `repo_url` to a URL string to tag every resource with the IaC location. Omit if you don't want it.",
-  "repo_url": "github.com/your-username/long-shot-ddns-aws"
+  "repo_url": "github.com/your-username/long-shot-ddns-aws",
+
+  "_optional_alert_email": "Set `alert_email` to get an email when the Pi stops reporting for 30h (SNS + CloudWatch alarm). Omit to skip. You must confirm the subscription email AWS sends after deploy.",
+  "alert_email": "you@example.com"
 }

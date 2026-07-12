@@ -22,12 +22,16 @@ from aws_cdk import (
     Stack,
     aws_apigateway as apigw,
     aws_certificatemanager as acm,
+    aws_cloudwatch as cloudwatch,
+    aws_cloudwatch_actions as cw_actions,
     aws_dynamodb as dynamodb,
     aws_iam as iam,
     aws_lambda as _lambda,
     aws_logs as logs,
     aws_route53 as route53,
     aws_route53_targets as targets,
+    aws_sns as sns,
+    aws_sns_subscriptions as sns_subs,
 )
 from constructs import Construct
 
@@ -42,6 +46,7 @@ class DdnsStack(Stack):
         hosted_zone_name: str,
         custom_domain: str,
         record_ttl: int = 300,
+        alert_email: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -71,8 +76,12 @@ class DdnsStack(Stack):
             log_retention=logs.RetentionDays.ONE_MONTH,
             environment={
                 "HOSTED_ZONE_ID": hosted_zone_id,
+                "HOSTED_ZONE_NAME": hosted_zone_name,
                 "RECORD_TTL": str(record_ttl),
                 "OWNERSHIP_TABLE": ownership_table.table_name,
+                # The API's own domain must never be updatable via the API —
+                # a client could otherwise clobber the endpoint's A-alias.
+                "RESERVED_HOSTNAMES": custom_domain,
             },
         )
 
@@ -160,6 +169,42 @@ class DdnsStack(Stack):
                 targets.ApiGatewayDomain(domain)
             ),
         )
+
+        # --- Dead-Pi alarm (optional) -----------------------------------------
+        # The client heartbeats at least once per 24h, so the Lambda is invoked
+        # at least daily in steady state. No invocations for 30h (5 x 6h
+        # periods, missing data = breaching) means the Pi is down or can't
+        # reach the endpoint — email via SNS. Enabled only when alert_email
+        # is set in cdk.context.json; the subscription must be confirmed once
+        # via the email AWS sends.
+        if alert_email:
+            alert_topic = sns.Topic(
+                self,
+                "DdnsAlertTopic",
+                display_name="long-shot-ddns alerts",
+            )
+            alert_topic.add_subscription(sns_subs.EmailSubscription(alert_email))
+
+            heartbeat_alarm = cloudwatch.Alarm(
+                self,
+                "DdnsHeartbeatAlarm",
+                alarm_name="long-shot-ddns-heartbeat-missing",
+                alarm_description=(
+                    "No long-shot-ddns Lambda invocations for 30h — the Pi has "
+                    "stopped reporting (down, offline, or misconfigured). "
+                    "Expected: at least one heartbeat POST every 24h."
+                ),
+                metric=handler_fn.metric_invocations(
+                    period=Duration.hours(6),
+                    statistic="Sum",
+                ),
+                threshold=1,
+                comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+                evaluation_periods=5,
+                treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
+            )
+            heartbeat_alarm.add_alarm_action(cw_actions.SnsAction(alert_topic))
+            heartbeat_alarm.add_ok_action(cw_actions.SnsAction(alert_topic))
 
         # --- Outputs --------------------------------------------------------
         CfnOutput(

@@ -14,6 +14,7 @@ See [`PROTOCOL.md`](PROTOCOL.md) for the wire contract shared with the client an
 - **DynamoDB table** `LongShotDdnsOwnership` — write-once first-claim ownership keyed on hostname.
 - **IAM role** scoped to one hosted zone (least privilege).
 - **CloudWatch log group** with 30-day retention.
+- **Heartbeat alarm** (optional) — emails you via SNS if the Pi stops reporting for 30h. Enabled by setting `alert_email` in `cdk.context.json`.
 
 ## Deploying your own
 
@@ -37,9 +38,17 @@ cat > cdk.context.json <<'EOF'
   "hosted_zone_id":   "Z123ABC456DEFGHIJKLMN",
   "hosted_zone_name": "example.com",
   "custom_domain":    "ddns.example.com",
-  "record_ttl":       300
+  "record_ttl":       300,
+  "alert_email":      "you@example.com"
 }
 EOF
+```
+
+`alert_email` is optional — it wires a CloudWatch alarm that emails you when the
+Pi hasn't reported for 30h (the client heartbeats at least daily). After the
+first deploy with it set, confirm the subscription email AWS sends you.
+
+```sh
 
 cdk bootstrap        # one-time per account/region
 cdk deploy

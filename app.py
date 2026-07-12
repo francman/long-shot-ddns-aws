@@ -56,6 +56,8 @@ if missing:
     sys.exit(2)
 
 record_ttl = int(app.node.try_get_context("record_ttl") or 300)
+# Optional: email for the dead-Pi heartbeat alarm. Omit to skip the alarm.
+alert_email = app.node.try_get_context("alert_email")
 
 DdnsStack(
     app,
@@ -64,6 +66,7 @@ DdnsStack(
     hosted_zone_name=hosted_zone_name,
     custom_domain=custom_domain,
     record_ttl=record_ttl,
+    alert_email=alert_email,
     env=cdk.Environment(
         account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
         region=os.environ.get("CDK_DEFAULT_REGION", "us-east-1"),
